@@ -43,10 +43,9 @@ def get_version(sub_package: str) -> str:
 
 
 SUB_PACKAGE = get_sub_package(PACKAGES_PATH)
-NAMESPACED_PACKAGE_NAME = f"{NAMESPACE}.{SUB_PACKAGE}"
 
 setup(
-    name=NAMESPACED_PACKAGE_NAME.replace("_utils", ""),
+    name=f"{NAMESPACE}.{SUB_PACKAGE.replace('_utils', '')}",
     version=get_version(SUB_PACKAGE),
     url="https://github.com/radeklat/namespaced-libraries-monorepo",
     author="A company",
@@ -55,7 +54,7 @@ setup(
     # See https://setuptools.readthedocs.io/en/latest/setuptools.html#find-namespace-packages
     package_dir={"": SOURCES_ROOT},
     packages=find_namespace_packages(
-        where=SOURCES_ROOT, include=[NAMESPACED_PACKAGE_NAME]
+        where=SOURCES_ROOT, include=[f"{NAMESPACE}.{SUB_PACKAGE}"]
     ),
     include_package_data=True,
     zip_safe=False,

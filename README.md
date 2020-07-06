@@ -27,9 +27,9 @@ pipenv run inv build
 Result in `dist`:
 
 ```text
-company.constants-1.0.0-py3-none-any.whl
-company.logging-2.3.1-py3-none-any.whl
-company.flask-1.0.1-py3-none-any.whl
+company_utils.constants-1.0.0-py3-none-any.whl
+company_utils.flask-1.0.1-py3-none-any.whl
+company_utils.logging-2.3.1-py3-none-any.whl
 ```
 
 ### Resetting the repository
