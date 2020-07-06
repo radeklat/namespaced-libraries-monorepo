@@ -1,0 +1,19 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+pipenv = "==2020.6.2"
+invoke = "~=1.4.1"
+termcolor = "~=1.1.0"
+
+[packages]
+# Sub-package dependencies are captured in individual
+# src/company_utils/<SUB PACKAGE>/requirements.txt files.
+# Run:
+#   pipenv run inv install-subpackage-dependencies
+# to collect and install all of them for local development.
+
+[pipenv]
+allow_prereleases = true

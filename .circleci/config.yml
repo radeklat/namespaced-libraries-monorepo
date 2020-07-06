@@ -1,0 +1,149 @@
+version: 2.1
+
+parameters:
+  working_directory:
+    type: string
+    default: ~/company_utils
+  namespace_root:
+    type: string
+    default: src/company_utils
+  python_version:
+    type: string
+    default: "3.6"
+
+commands:
+  check_job_required:
+    parameters:
+      directory:
+        type: string
+    steps:
+      - run:
+          name: Check if job is required
+          command: |
+            if [[ "${CIRCLE_BRANCH}" == "master" ]]
+            then
+              MASTER_REFERENCE_COMMIT_SHA=$(git rev-parse HEAD~1)
+              echo "Runing on master; comparing to previous master commit (${MASTER_REFERENCE_COMMIT_SHA})"
+            else
+              MASTER_REFERENCE_COMMIT_SHA=$(git merge-base ${CIRCLE_BRANCH} origin/master)
+              echo "Runing on non-master branch; comparing with last master commit on branch (${MASTER_REFERENCE_COMMIT_SHA})"
+            fi
+            
+            cd << parameters.directory >>
+
+            # summary of files at this directory tree that were changed. empty
+            # string if no changes found...
+            DIFF_SUMMARY=$(git diff --shortstat ${MASTER_REFERENCE_COMMIT_SHA}..HEAD ./)
+
+            if [[ -z "${DIFF_SUMMARY}" ]]; then
+              echo "Code did not change; skipping job!"
+              circleci-agent step halt
+            else
+              echo "Code changed; running job!"
+            fi
+
+jobs: # A basic unit of work in a run
+  test-python-common:
+    # Tests independent on sub-package and Python version
+    working_directory: << pipeline.parameters.working_directory >>
+    docker:
+      - image: circleci/python:<< pipeline.parameters.python_version >>
+        environment:
+          PIPENV_VENV_IN_PROJECT: true
+    steps:
+      - checkout 
+      - run: sudo chown -R circleci:circleci /usr/local/bin
+      - run: sudo chown -R circleci:circleci /usr/local/lib/python3.6/site-packages
+      - restore_cache:
+          key: global-python-utils-<< pipeline.parameters.python_version >>-{{ checksum "Pipfile.lock" }}
+      - run:
+          name: Install dev libraries
+          command: |
+            pip install --upgrade pip &&
+            pip install pipenv &&
+            pipenv install --dev --deploy
+      - run:
+          name: Version independent test
+          command: echo "Put a test here."
+      - save_cache:
+          key: global-python-utils-<< pipeline.parameters.python_version >>-{{ checksum "Pipfile.lock" }}
+          paths:
+            - ".venv"
+            - "/usr/local/bin"
+            - "/usr/local/lib/python<< pipeline.parameters.python_version >>/site-packages"
+  test-python-sub-package-and-version-specific:
+    working_directory: << pipeline.parameters.working_directory >>
+    parameters:
+      version:
+        type: string
+      package:
+        type: string
+    docker:
+      - image: circleci/python:<< parameters.version >>
+        environment:
+          PIPENV_VENV_IN_PROJECT: true
+    steps:
+      - checkout
+      - check_job_required:
+          directory: << pipeline.parameters.namespace_root >>/<< parameters.package >>
+      - run: sudo chown -R circleci:circleci /usr/local/bin
+      - run: sudo chown -R circleci:circleci /usr/local/lib/python<< parameters.version >>/site-packages
+      - restore_cache:
+          keys:
+            - global-python-utils-<< parameters.version >>-{{ checksum "Pipfile.lock" }}-{{ checksum "<< pipeline.parameters.namespace_root >>/<< parameters.package >>/requirements.txt" }}
+            - global-python-utils-<< parameters.version >>-{{ checksum "Pipfile.lock" }}
+      - run:
+          name: Install dev libraries
+          command: |
+            pip install --upgrade pip &&
+            pip install pipenv &&
+            pipenv install --dev --deploy &&
+            pipenv run inv install-subpackage-dependencies --name << parameters.package >>
+      - run:
+          name: Version-dependent test
+          command: echo "Put a test here."
+      - save_cache:
+          key: global-python-utils-<< parameters.version >>-{{ checksum "Pipfile.lock" }}-{{ checksum "<< pipeline.parameters.namespace_root >>/<< parameters.package >>/requirements.txt" }}
+          paths:
+            - ".venv"
+            - "/usr/local/bin"
+            - "/usr/local/lib/python<< parameters.version >>/site-packages"
+
+  build:
+    working_directory: << pipeline.parameters.working_directory >>
+    docker: # run the steps with Docker
+      - image: circleci/python:<< pipeline.parameters.python_version >>
+        environment:
+          PIPENV_VENV_IN_PROJECT: true
+    steps:
+      - checkout
+      - run: sudo chown -R circleci:circleci /usr/local/bin
+      - run: sudo chown -R circleci:circleci /usr/local/lib/python3.6/site-packages
+      - restore_cache:
+          key: global-python-utils-<< pipeline.parameters.python_version >>-{{ checksum "Pipfile.lock" }}
+      - run:
+          name: Build library
+          command: |
+            pip install pipenv &&
+            pipenv run inv build
+      - persist_to_workspace:
+          root: << pipeline.parameters.working_directory >>
+          paths: .
+
+workflows:
+  version: 2
+  all_pipelines:
+    jobs:
+      - test-python-common:
+          name: Version unspecific tests
+      - test-python-sub-package-and-version-specific:
+          name: << matrix.package >>/Python << matrix.version >> tests
+          matrix:
+            parameters:
+              version: ["3.6", "3.7", "3.8"]
+              package: ["constants", "flask_utils", "logging_utils"]
+      - build:
+          name: Packages build
+          requires:
+            - Version unspecific tests
+            - test-python-sub-package-and-version-specific
