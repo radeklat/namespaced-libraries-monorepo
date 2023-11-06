@@ -87,7 +87,7 @@ def install_subpackage_dependencies(ctx, name=None, force=False):
     print_header("Sub-packages", icon="📦")
     print_header("Collecting dependencies", level=2, icon="🛒")
 
-    packages = os.listdir(PROJECT_INFO.namespace_directory) if name is None else [name]
+    packages = [directory for directory in (os.listdir(PROJECT_INFO.namespace_directory) if name is None else [name]) if os.path.isfile(directory)]
     all_requirements = ""
     libraries_to_sub_packages = defaultdict(list)
 
